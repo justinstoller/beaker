@@ -24,88 +24,103 @@ module Beaker
 
       start = Time.now
       @vcloud_hosts.each_with_index do |h, i|
-        # Generate a randomized hostname
-        o = [('a'..'z'),('0'..'9')].map{|r| r.to_a}.flatten
-        h['vmhostname'] = o[rand(25)] + (0...14).map{o[rand(o.length)]}.join
+        if h['vpool']
+          require 'json'
+          require 'net/http'
 
-        if h['template'] =~ /\//
-          templatefolders = h['template'].split('/')
-          h['template'] = templatefolders.pop
-        end
+          @logger.notify "Requesting VM from vCloud host pool '#{h.name}'"
 
-        @logger.notify "Deploying #{h['vmhostname']} (#{h.name}) to #{@options['folder']} from template '#{h['template']}'"
+          uri = URI.parse(h['vpool'])
+          http = Net::HTTP.new( uri.host, uri.port )
+          request = Net::HTTP::Post.new(uri.request_uri)
+          request.set_form_data({'pool' => @options['resourcepool'], 'folder' => 'foo'})
 
-        vm = {}
-
-        if templatefolders
-          vm[h['template']] = vsphere_helper.find_folder(templatefolders.join('/')).find(h['template'])
+          h['vmhostname'] = JSON.parse(http.request(request).body)[h.name]['hostname']
+          @logger.notify "Using available vCloud host '#{h['vmhostname']}' (#{h.name})"
         else
-          vm = vsphere_helper.find_vms(h['template'])
-        end
+          # Generate a randomized hostname
+          o = [('a'..'z'),('0'..'9')].map{|r| r.to_a}.flatten
+          h['vmhostname'] = o[rand(25)] + (0...14).map{o[rand(o.length)]}.join
 
-        if vm.length == 0
-          raise "Unable to find template '#{h['template']}'!"
-        end
+          if h['template'] =~ /\//
+            templatefolders = h['template'].split('/')
+            h['template'] = templatefolders.pop
+          end
 
-        # Add VM annotation
-        configSpec = RbVmomi::VIM.VirtualMachineConfigSpec(
-          :annotation =>
-            'Base template:  ' + h['template'] + "\n" +
-            'Creation time:  ' + Time.now.strftime("%Y-%m-%d %H:%M") + "\n\n" +
-            'CI build link:  ' + ( ENV['BUILD_URL'] || 'Deployed independently of CI' )
-        )
+          @logger.notify "Deploying #{h['vmhostname']} (#{h.name}) to #{@options['folder']} from template '#{h['template']}'"
 
-        # Are we using a customization spec?
-        customizationSpec = vsphere_helper.find_customization( h['template'] )
+          vm = {}
 
-        if customizationSpec
-          # Print a logger message if using a customization spec
-          @logger.notify "Found customization spec for '#{h['template']}', will apply after boot"
-        end
-
-        # Put the VM in the specified folder and resource pool
-        relocateSpec = RbVmomi::VIM.VirtualMachineRelocateSpec(
-          :datastore    => vsphere_helper.find_datastore(@options['datastore']),
-          :pool         => vsphere_helper.find_pool(@options['resourcepool']),
-          :diskMoveType => :moveChildMostDiskBacking
-        )
-
-        # Create a clone spec
-        spec = RbVmomi::VIM.VirtualMachineCloneSpec(
-          :config        => configSpec,
-          :location      => relocateSpec,
-          :customization => customizationSpec,
-          :powerOn       => true,
-          :template      => false
-        )
-
-        # Deploy from specified template
-        if (@vcloud_hosts.length == 1) or (i == @vcloud_hosts.length - 1)
-          vm[h['template']].CloneVM_Task( :folder => vsphere_helper.find_folder(@options['folder']), :name => h['vmhostname'], :spec => spec ).wait_for_completion
-        else
-          vm[h['template']].CloneVM_Task( :folder => vsphere_helper.find_folder(@options['folder']), :name => h['vmhostname'], :spec => spec )
-        end
-      end
-      @logger.notify 'Spent %.2f seconds deploying VMs' % (Time.now - start)
-
-      try = (Time.now - start) / 5
-
-      start = Time.now
-      @vcloud_hosts.each_with_index do |h, i|
-        @logger.notify "Booting #{h['vmhostname']} (#{h.name}) and waiting for it to register with vSphere"
-
-        until
-          vsphere_helper.find_vms(h['vmhostname'])[h['vmhostname']].summary.guest.toolsRunningStatus == 'guestToolsRunning' and
-          vsphere_helper.find_vms(h['vmhostname'])[h['vmhostname']].summary.guest.ipAddress != nil
-          if try <= attempts
-            sleep 5
-            try += 1
+          if templatefolders
+            vm[h['template']] = vsphere_helper.find_folder(templatefolders.join('/')).find(h['template'])
           else
-            raise "vSphere registration failed after #{wait} seconds"
+            vm = vsphere_helper.find_vms(h['template'])
+          end
+
+          if vm.length == 0
+            raise "Unable to find template '#{h['template']}'!"
+          end
+
+          # Add VM annotation
+          configSpec = RbVmomi::VIM.VirtualMachineConfigSpec(
+            :annotation =>
+              'Base template:  ' + h['template'] + "\n" +
+              'Creation time:  ' + Time.now.strftime("%Y-%m-%d %H:%M") + "\n\n" +
+              'CI build link:  ' + ( ENV['BUILD_URL'] || 'Deployed independently of CI' )
+          )
+
+          # Are we using a customization spec?
+          customizationSpec = vsphere_helper.find_customization( h['template'] )
+
+          if customizationSpec
+            # Print a logger message if using a customization spec
+            @logger.notify "Found customization spec for '#{h['template']}', will apply after boot"
+          end
+
+          # Put the VM in the specified folder and resource pool
+          relocateSpec = RbVmomi::VIM.VirtualMachineRelocateSpec(
+            :datastore    => vsphere_helper.find_datastore(@options['datastore']),
+            :pool         => vsphere_helper.find_pool(@options['resourcepool']),
+            :diskMoveType => :moveChildMostDiskBacking
+          )
+
+          # Create a clone spec
+          spec = RbVmomi::VIM.VirtualMachineCloneSpec(
+            :config        => configSpec,
+            :location      => relocateSpec,
+            :customization => customizationSpec,
+            :powerOn       => true,
+            :template      => false
+          )
+
+          # Deploy from specified template
+          if (@vcloud_hosts.length == 1) or (i == @vcloud_hosts.length - 1)
+            vm[h['template']].CloneVM_Task( :folder => vsphere_helper.find_folder(@options['folder']), :name => h['vmhostname'], :spec => spec ).wait_for_completion
+          else
+            vm[h['template']].CloneVM_Task( :folder => vsphere_helper.find_folder(@options['folder']), :name => h['vmhostname'], :spec => spec )
           end
         end
+        @logger.notify 'Spent %.2f seconds deploying VMs' % (Time.now - start)
+
+        try = (Time.now - start) / 5
+
+        start = Time.now
+        @vcloud_hosts.each_with_index do |h, i|
+          @logger.notify "Booting #{h['vmhostname']} (#{h.name}) and waiting for it to register with vSphere"
+
+          until
+            vsphere_helper.find_vms(h['vmhostname'])[h['vmhostname']].summary.guest.toolsRunningStatus == 'guestToolsRunning' and
+            vsphere_helper.find_vms(h['vmhostname'])[h['vmhostname']].summary.guest.ipAddress != nil
+            if try <= attempts
+              sleep 5
+              try += 1
+            else
+              raise "vSphere registration failed after #{wait} seconds"
+            end
+          end
+        end
+        @logger.notify "Spent %.2f seconds booting and waiting for vSphere registration" % (Time.now - start)
       end
-      @logger.notify "Spent %.2f seconds booting and waiting for vSphere registration" % (Time.now - start)
 
       start = Time.now
       @vcloud_hosts.each_with_index do |h, i|
