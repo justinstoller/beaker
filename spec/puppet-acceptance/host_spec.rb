@@ -43,9 +43,10 @@ module PuppetAcceptance
       @options = { :logger => logger }
       host.instance_variable_set :@connection, conn
       args = [ 'source', 'target', {} ]
+      whatever = args + [nil]
 
       logger.should_receive(:debug)
-      conn.should_receive(:scp_to).with(*args)
+      conn.should_receive(:scp_to).with(*whatever)
 
       host.do_scp_to *args
     end
@@ -56,9 +57,10 @@ module PuppetAcceptance
       @options = { :logger => logger }
       host.instance_variable_set :@connection, conn
       args = [ 'source', 'target', {} ]
+      whatever = args + [nil]
 
       logger.should_receive(:debug)
-      conn.should_receive(:scp_from).with(*args)
+      conn.should_receive(:scp_from).with(*whatever)
 
       host.do_scp_from *args
     end

@@ -7,11 +7,13 @@ module PuppetAcceptance
     let(:args)    { @args    || Array.new }
     let(:options) { @options || Hash.new  }
 
-    subject(:cmd) { PuppetCommand.new( command, *args, options ) }
+    subject(:cmd) { PuppetCommand.new( command, args, options ) }
     let :config do
       MockConfig.new({}, {'name' => {'platform' => @platform}}, @pe)
     end
-    let(:host)    { Host.create 'name', {}, config }
+    let(:host)     { Host.create 'name', {}, config }
+    let(:nix_path) { %q[PATH="/usr/bin:/opt/puppet-git-repos/hiera/bin:${PATH}"] }
+    let(:nix_lib)  { %q[RUBYLIB="/opt/puppet-git-repos/hiera/lib:/opt/puppet-git-repos/hiera-puppet/lib:${RUBYLIB}"] }
 
     it 'creates a Windows env for a Windows host' do
       @platform = 'windows'
@@ -21,12 +23,18 @@ module PuppetAcceptance
 
       expect( host ).to be_a_kind_of Windows::Host
       expect( cmd.options ).to be == @options
-      expect( cmd.args    ).to be == @args
+      expect( cmd.args    ).to be == [@args]
       expect( cmd.command ).to be == "puppet " + @command
 
       expect( cmd.args_string    ).to be == 'to the baz'
       expect( cmd.options_string ).to be == '--foo=bar'
-      expect( cmd.environment_string_for(host, cmd.environment) ).to be == "env PATH=\"/opt/puppet-git-repos/hiera/bin:${PATH}\" RUBYLIB=\"`cygpath -w /opt/puppet-git-repos/hiera/lib`;`cygpath -w /opt/puppet-git-repos/hiera-puppet/lib`;${RUBYLIB}\" cmd.exe /c"
+
+      command_line = cmd.environment_string_for( host, cmd.environment )
+      path = %q[PATH="/opt/puppet-git-repos/hiera/bin:${PATH}"]
+      rubylib = %q[RUBYLIB="`cygpath -w /opt/puppet-git-repos/hiera/lib`;`cygpath -w /opt/puppet-git-repos/hiera-puppet/lib`;${RUBYLIB}"]
+      expect( command_line ).to include( path )
+      expect( command_line ).to include( rubylib )
+      expect( command_line ).to include( "cmd.exe /c" )
     end
 
     it 'creates a Unix env for a Unix host' do
@@ -37,12 +45,15 @@ module PuppetAcceptance
 
       expect( host ).to be_a_kind_of Unix::Host
       expect( cmd.options ).to be == @options
-      expect( cmd.args    ).to be == @args
+      expect( cmd.args    ).to be == [@args]
       expect( cmd.command ).to be == "puppet " + @command
 
       expect( cmd.args_string    ).to be == 'to the baz'
       expect( cmd.options_string ).to be == '--foo=bar'
-      expect( cmd.environment_string_for(host, cmd.environment) ).to be == "env PATH=\"/usr/bin:/opt/puppet-git-repos/hiera/bin:${PATH}\" RUBYLIB=\"/opt/puppet-git-repos/hiera/lib:/opt/puppet-git-repos/hiera-puppet/lib:${RUBYLIB}\""
+
+      command_line = cmd.environment_string_for( host, cmd.environment )
+      expect( command_line ).to include( nix_path )
+      expect( command_line ).to include( nix_lib )
     end
 
     it 'creates an AIX env for an AIX host' do
@@ -53,12 +64,15 @@ module PuppetAcceptance
 
       expect( host ).to be_a_kind_of Aix::Host
       expect( cmd.options ).to be == @options
-      expect( cmd.args    ).to be == @args
+      expect( cmd.args    ).to be == [@args]
       expect( cmd.command ).to be == "puppet " + @command
 
       expect( cmd.args_string    ).to be == 'to the baz'
       expect( cmd.options_string ).to be == '--foo=bar'
-      expect( cmd.environment_string_for(host, cmd.environment) ).to be == "env PATH=\"/usr/bin:/opt/puppet-git-repos/hiera/bin:${PATH}\" RUBYLIB=\"/opt/puppet-git-repos/hiera/lib:/opt/puppet-git-repos/hiera-puppet/lib:${RUBYLIB}\""
+
+      command_line = cmd.environment_string_for( host, cmd.environment )
+      expect( command_line ).to include( nix_path )
+      expect( command_line ).to include( nix_lib )
     end
 
     it 'correctly adds additional ENV to default ENV' do
@@ -69,12 +83,14 @@ module PuppetAcceptance
 
       expect( host ).to be_a_kind_of Unix::Host
       expect( cmd.options ).to be == @options
-      expect( cmd.args    ).to be == @args
+      expect( cmd.args    ).to be == [@args]
       expect( cmd.command ).to be == "puppet " + @command
 
       expect( cmd.args_string    ).to be == 'to the baz'
       expect( cmd.options_string ).to be == '--foo=bar'
-      expect( cmd.environment_string_for(host, cmd.environment) ).to be == "env PATH=\"/STRING_ENV/bin\" PATH=\"/usr/bin:/opt/puppet-git-repos/hiera/bin:${PATH}\" RUBYLIB=\"/opt/puppet-git-repos/hiera/lib:/opt/puppet-git-repos/hiera-puppet/lib:${RUBYLIB}\""
+      wtf = %q[PATH="/STRING_ENV/bin"]
+      puts "this isn't safe on 1.8"
+      expect( cmd.environment_string_for(host, cmd.environment) ).to include( wtf )
     end
 
     it 'correctly adds additional :ENV to default ENV' do
@@ -85,12 +101,14 @@ module PuppetAcceptance
 
       expect( host ).to be_a_kind_of Unix::Host
       expect( cmd.options ).to be == @options
-      expect( cmd.args    ).to be == @args
+      expect( cmd.args    ).to be == [@args]
       expect( cmd.command ).to be == "puppet " + @command
 
       expect( cmd.args_string    ).to be == 'to the baz'
       expect( cmd.options_string ).to be == '--foo=bar'
-      expect( cmd.environment_string_for(host, cmd.environment) ).to be == "env PATH=\"/SYMBOL_ENV/bin\" PATH=\"/usr/bin:/opt/puppet-git-repos/hiera/bin:${PATH}\" RUBYLIB=\"/opt/puppet-git-repos/hiera/lib:/opt/puppet-git-repos/hiera-puppet/lib:${RUBYLIB}\""
+      wtf = %q[PATH="/SYMBOL_ENV/bin"]
+      puts "this isn't safe on 1.8"
+      expect( cmd.environment_string_for(host, cmd.environment) ).to include( wtf )
     end
 
     it 'correctly adds additional :environment to default ENV' do
@@ -101,12 +119,14 @@ module PuppetAcceptance
 
       expect( host ).to be_a_kind_of Unix::Host
       expect( cmd.options ).to be == @options
-      expect( cmd.args    ).to be == @args
+      expect( cmd.args    ).to be == [@args]
       expect( cmd.command ).to be == "puppet " + @command
 
       expect( cmd.args_string    ).to be == 'to the baz'
       expect( cmd.options_string ).to be == '--foo=bar'
-      expect( cmd.environment_string_for(host, cmd.environment) ).to be == "env PATH=\"/SYMBOL_ENVIRONMENT/bin\" PATH=\"/usr/bin:/opt/puppet-git-repos/hiera/bin:${PATH}\" RUBYLIB=\"/opt/puppet-git-repos/hiera/lib:/opt/puppet-git-repos/hiera-puppet/lib:${RUBYLIB}\""
+      wtf = %q[PATH="/SYMBOL_ENVIRONMENT/bin"]
+      puts "this isn't safe on 1.8"
+      expect( cmd.environment_string_for(host, cmd.environment) ).to include( wtf )
     end
 
     it 'correctly adds additional environment to default ENV' do
@@ -117,12 +137,14 @@ module PuppetAcceptance
 
       expect( host ).to be_a_kind_of Unix::Host
       expect( cmd.options ).to be == @options
-      expect( cmd.args    ).to be == @args
+      expect( cmd.args    ).to be == [@args]
       expect( cmd.command ).to be == "puppet " + @command
 
       expect( cmd.args_string    ).to be == 'to the baz'
       expect( cmd.options_string ).to be == '--foo=bar'
-      expect( cmd.environment_string_for(host, cmd.environment) ).to be == "env PATH=\"/STRING_ENVIRONMENT/bin\" PATH=\"/usr/bin:/opt/puppet-git-repos/hiera/bin:${PATH}\" RUBYLIB=\"/opt/puppet-git-repos/hiera/lib:/opt/puppet-git-repos/hiera-puppet/lib:${RUBYLIB}\""
+      wtf = %q[PATH="/STRING_ENVIRONMENT/bin"]
+      puts "this isn't safe on 1.8"
+      expect( cmd.environment_string_for(host, cmd.environment) ).to include( wtf )
     end
   end
 end

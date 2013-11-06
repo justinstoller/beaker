@@ -41,12 +41,12 @@ describe ClassMixedWithDSLRoles do
     it 'raises an error if there is more than one master' do
       @hosts = [ master, monolith ]
       subject.should_receive( :hosts ).and_return( hosts )
-      expect { subject.master }.to raise_error PuppetAcceptance::DSL::FailTest
+      expect { subject.master }.to raise_error RuntimeError
     end
     it 'and raises an error if there is no master' do
       @hosts = [ agent1, agent2, custom ]
       subject.should_receive( :hosts ).and_return( hosts )
-      expect { subject.master }.to raise_error PuppetAcceptance::DSL::FailTest
+      expect { subject.master }.to raise_error RuntimeError
     end
   end
   describe '#dashboard' do
@@ -58,12 +58,12 @@ describe ClassMixedWithDSLRoles do
     it 'raises an error if there is more than one dashboard' do
       @hosts = [ a_and_dash, monolith ]
       subject.should_receive( :hosts ).and_return( hosts )
-      expect { subject.dashboard }.to raise_error PuppetAcceptance::DSL::FailTest
+      expect { subject.dashboard }.to raise_error RuntimeError
     end
     it 'and raises an error if there is no dashboard' do
       @hosts = [ agent1, agent2, custom ]
       subject.should_receive( :hosts ).and_return( hosts )
-      expect { subject.dashboard }.to raise_error PuppetAcceptance::DSL::FailTest
+      expect { subject.dashboard }.to raise_error RuntimeError
     end
   end
   describe '#database' do
@@ -75,12 +75,12 @@ describe ClassMixedWithDSLRoles do
     it 'raises an error if there is more than one database' do
       @hosts = [ db, monolith ]
       subject.should_receive( :hosts ).and_return( hosts )
-      expect { subject.database }.to raise_error PuppetAcceptance::DSL::FailTest
+      expect { subject.database }.to raise_error RuntimeError
     end
     it 'and raises an error if there is no database' do
       @hosts = [ agent1, agent2, custom ]
       subject.should_receive( :hosts ).and_return( hosts )
-      expect { subject.database }.to raise_error PuppetAcceptance::DSL::FailTest
+      expect { subject.database }.to raise_error RuntimeError
     end
   end
 end
