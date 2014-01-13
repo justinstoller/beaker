@@ -4,11 +4,12 @@ module Beaker
   module Options
 
     describe Parser do
-      let(:parser)    { Parser.new }
-      let(:opts_path) { File.join(File.expand_path(File.dirname(__FILE__)), "data", "opts.txt") }
-      let(:hosts_path)  { File.join(File.expand_path(File.dirname(__FILE__)), "data", "hosts.cfg") }
-      let(:badyaml_path)  { File.join(File.expand_path(File.dirname(__FILE__)), "data", "badyaml.cfg") }
-      let(:home) {ENV['HOME']}
+      let(:parser)           { Parser.new }
+      let(:opts_path)        { File.join(File.expand_path(File.dirname(__FILE__)), "data", "opts.txt") }
+      let(:hosts_path)       { File.join(File.expand_path(File.dirname(__FILE__)), "data", "hosts.cfg") }
+      let(:badyaml_path)     { File.join(File.expand_path(File.dirname(__FILE__)), "data", "badyaml.cfg") }
+      let(:home)             { ENV['HOME'] }
+      let(:platforms_regex)  { Parser::PLATFORMS }
 
       it "supports usage function" do
         expect{parser.usage}.to_not raise_error
@@ -20,26 +21,46 @@ module Beaker
         expect(parser.repo).to be === "#{repo}"
       end
 
+      #read through the file of possible platform values, correctly identify the 50 invalid platform values
+      describe "recognizes valid platforms" do
+
+        it "accepts correctly formatted platform values" do
+          expect( 'oracle-version-arch' =~ platforms_regex ).to be === 0
+        end
+
+        it "rejects non-supported osfamilies" do
+          expect( 'amazon6-version-arch' =~ platforms_regex ).to be === nil
+        end
+
+        it "rejects platforms without version/arch" do
+          expect( 'ubuntu-5' =~ platforms_regex ).to be === nil
+        end
+
+        it "rejects platforms that do not have osfamily at start of string" do
+          expect( 'oel-r5-u6-x86-64' =~ platforms_regex ).to be === nil
+        end
+      end
+
       #test parse_install_options
       it "can transform --install PUPPET/3.1 into #{repo}/puppet.git#3.1" do
         opts = ["PUPPET/3.1"]
-        expect(parser.parse_git_repos(opts)).to be === ["#{repo}/puppet.git#3.1"] 
+        expect(parser.parse_git_repos(opts)).to be === ["#{repo}/puppet.git#3.1"]
       end
       it "can transform --install FACTER/v.1.0 into #{repo}/facter.git#v.1.0" do
         opts = ["FACTER/v.1.0"]
-        expect(parser.parse_git_repos(opts)).to be === ["#{repo}/facter.git#v.1.0"] 
+        expect(parser.parse_git_repos(opts)).to be === ["#{repo}/facter.git#v.1.0"]
       end
       it "can transform --install HIERA/xyz into #{repo}/hiera.git#xyz" do
         opts = ["HIERA/xyz"]
-        expect(parser.parse_git_repos(opts)).to be === ["#{repo}/hiera.git#xyz"] 
+        expect(parser.parse_git_repos(opts)).to be === ["#{repo}/hiera.git#xyz"]
       end
       it "can transform --install HIERA-PUPPET/path/to/repo into #{repo}/hiera-puppet.git#path/to/repo" do
         opts = ["HIERA-PUPPET/path/to/repo"]
-        expect(parser.parse_git_repos(opts)).to be === ["#{repo}/hiera-puppet.git#path/to/repo"] 
+        expect(parser.parse_git_repos(opts)).to be === ["#{repo}/hiera-puppet.git#path/to/repo"]
       end
       it "can transform --install PUPPET/3.1,FACTER/v.1.0 into #{repo}/puppet.git#3.1,#{repo}/facter.git#v.1.0" do
         opts = ["PUPPET/3.1", "FACTER/v.1.0"]
-        expect(parser.parse_git_repos(opts)).to be === ["#{repo}/puppet.git#3.1", "#{repo}/facter.git#v.1.0"] 
+        expect(parser.parse_git_repos(opts)).to be === ["#{repo}/puppet.git#3.1", "#{repo}/facter.git#v.1.0"]
       end
       it "can leave --install git://github.com/puppetlabs/puppet.git#my/full/path alone" do
         opts = ["git://github.com/puppetlabs/puppet.git#my/full/path"]
@@ -77,11 +98,45 @@ module Beaker
         it 'raises an error when no ruby files are found' do
           @files = [ pl_test, sh_test ]
           paths
-          expect{parser.file_list([File.expand_path(test_dir)])}.to raise_error(ArgumentError) 
+          expect{parser.file_list([File.expand_path(test_dir)])}.to raise_error(ArgumentError)
         end
         it 'raises an error when no paths are specified for searching' do
           @files = ''
           expect{parser.file_list('')}.to raise_error(ArgumentError)
+        end
+
+      end
+
+      context 'combining split_arg and file_list maintain test file ordering', :use_fakefs => true do
+        let(:test_dir) { 'tmp/tests/' }
+        let(:other_test_dir) {'tmp/tests2/' }
+
+        before :each do
+          @files = ['00_EnvSetup.rb', '035_StopFirewall.rb', '05_HieraSetup.rb', '01_TestSetup.rb', '03_PuppetMasterSanity.rb', '06_InstallModules.rb', '02_PuppetUserAndGroup.rb', '04_ValidateSignCert.rb', '07_InstallCACerts.rb'].shuffle!.map!{|x| test_dir + x }
+          @other_files = ['00_EnvSetup.rb', '035_StopFirewall.rb', '05_HieraSetup.rb', '01_TestSetup.rb', '03_PuppetMasterSanity.rb', '06_InstallModules.rb', '02_PuppetUserAndGroup.rb', '04_ValidateSignCert.rb', '07_InstallCACerts.rb'].shuffle!.map!{|x| other_test_dir + x }
+          create_files(@files)
+          create_files(@other_files)
+          create_files(['08_foss.rb'])
+        end
+
+        it "when provided a file followed by dir, runs the file first" do
+          arg = "08_foss.rb,#{test_dir}"
+          expect(parser.file_list(parser.split_arg(arg))).to be === ["08_foss.rb", "#{File.expand_path(test_dir)}/00_EnvSetup.rb", "#{File.expand_path(test_dir)}/01_TestSetup.rb", "#{File.expand_path(test_dir)}/02_PuppetUserAndGroup.rb", "#{File.expand_path(test_dir)}/035_StopFirewall.rb", "#{File.expand_path(test_dir)}/03_PuppetMasterSanity.rb", "#{File.expand_path(test_dir)}/04_ValidateSignCert.rb", "#{File.expand_path(test_dir)}/05_HieraSetup.rb", "#{File.expand_path(test_dir)}/06_InstallModules.rb", "#{File.expand_path(test_dir)}/07_InstallCACerts.rb"]
+        end
+
+        it "when provided a dir followed by a file, runs the file last" do
+          arg = "#{test_dir},08_foss.rb"
+          expect(parser.file_list(parser.split_arg(arg))).to be === ["#{File.expand_path(test_dir)}/00_EnvSetup.rb", "#{File.expand_path(test_dir)}/01_TestSetup.rb", "#{File.expand_path(test_dir)}/02_PuppetUserAndGroup.rb", "#{File.expand_path(test_dir)}/035_StopFirewall.rb", "#{File.expand_path(test_dir)}/03_PuppetMasterSanity.rb", "#{File.expand_path(test_dir)}/04_ValidateSignCert.rb", "#{File.expand_path(test_dir)}/05_HieraSetup.rb", "#{File.expand_path(test_dir)}/06_InstallModules.rb", "#{File.expand_path(test_dir)}/07_InstallCACerts.rb", "08_foss.rb"]
+        end
+
+        it "correctly orders files in a directory" do
+          arg = "#{test_dir}"
+          expect(parser.file_list(parser.split_arg(arg))).to be === ["#{File.expand_path(test_dir)}/00_EnvSetup.rb", "#{File.expand_path(test_dir)}/01_TestSetup.rb", "#{File.expand_path(test_dir)}/02_PuppetUserAndGroup.rb", "#{File.expand_path(test_dir)}/035_StopFirewall.rb", "#{File.expand_path(test_dir)}/03_PuppetMasterSanity.rb", "#{File.expand_path(test_dir)}/04_ValidateSignCert.rb", "#{File.expand_path(test_dir)}/05_HieraSetup.rb", "#{File.expand_path(test_dir)}/06_InstallModules.rb", "#{File.expand_path(test_dir)}/07_InstallCACerts.rb"]
+        end
+
+        it "when provided two directories orders each directory separately" do
+          arg = "#{test_dir}/,#{other_test_dir}/"
+          expect(parser.file_list(parser.split_arg(arg))).to be === ["#{File.expand_path(test_dir)}/00_EnvSetup.rb", "#{File.expand_path(test_dir)}/01_TestSetup.rb", "#{File.expand_path(test_dir)}/02_PuppetUserAndGroup.rb", "#{File.expand_path(test_dir)}/035_StopFirewall.rb", "#{File.expand_path(test_dir)}/03_PuppetMasterSanity.rb", "#{File.expand_path(test_dir)}/04_ValidateSignCert.rb", "#{File.expand_path(test_dir)}/05_HieraSetup.rb", "#{File.expand_path(test_dir)}/06_InstallModules.rb", "#{File.expand_path(test_dir)}/07_InstallCACerts.rb", "#{File.expand_path(other_test_dir)}/00_EnvSetup.rb", "#{File.expand_path(other_test_dir)}/01_TestSetup.rb", "#{File.expand_path(other_test_dir)}/02_PuppetUserAndGroup.rb", "#{File.expand_path(other_test_dir)}/035_StopFirewall.rb", "#{File.expand_path(other_test_dir)}/03_PuppetMasterSanity.rb", "#{File.expand_path(other_test_dir)}/04_ValidateSignCert.rb", "#{File.expand_path(other_test_dir)}/05_HieraSetup.rb", "#{File.expand_path(other_test_dir)}/06_InstallModules.rb", "#{File.expand_path(other_test_dir)}/07_InstallCACerts.rb"]
         end
 
       end
@@ -98,19 +153,19 @@ module Beaker
 
       it "can correctly combine arguments from different sources" do
         FakeFS.deactivate!
-        args = ["-h", hosts_path, "--debug", "--type", "git", "--install", "PUPPET/1.0,HIERA/hello"]
-        expect(parser.parse_args(args)).to be === {:hosts_file=>hosts_path, :options_file=>nil, :type=>"git", :provision=>true, :preserve_hosts=>false, :root_keys=>false, :quiet=>false, :xml=>false, :color=>true, :debug=>true, :dry_run=>false, :timeout=>300, :fail_mode=>nil, :timesync=>false, :repo_proxy=>false, :add_el_extras=>false, :consoleport=>443, :pe_dir=>"/opt/enterprise/dists", :pe_version_file=>"LATEST", :pe_version_file_win=>"LATEST-win", :dot_fog=>"#{home}/.fog", :help=>false, :ec2_yaml=>"config/image_templates/ec2.yaml", :ssh=>{:config=>false, :paranoid=>false, :timeout=>300, :auth_methods=>["publickey"], :port=>22, :forward_agent=>true, :keys=>["#{home}/.ssh/id_rsa"], :user_known_hosts_file=>"#{home}/.ssh/known_hosts"}, :install=>["git://github.com/puppetlabs/puppet.git#1.0", "git://github.com/puppetlabs/hiera.git#hello"], :HOSTS=>{:"pe-ubuntu-lucid"=>{:roles=>["agent", "dashboard", "database", "master"], :vmname=>"pe-ubuntu-lucid", :platform=>"ubuntu-10.04-i386", :snapshot=>"clean-w-keys", :hypervisor=>"fusion"}, :"pe-centos6"=>{:roles=>["agent"], :vmname=>"pe-centos6", :platform=>"el-6-i386", :hypervisor=>"fusion", :snapshot=>"clean-w-keys"}}, :nfs_server=>"none", :helper=>[], :load_path=>[], :tests=>[], :pre_suite=>[], :post_suite=>[], :modules=>[]}
+        args = ["-h", hosts_path, "--log-level", "debug", "--type", "git", "--install", "PUPPET/1.0,HIERA/hello"]
+        expect(parser.parse_args(args)).to be === {:log_level=>"debug", :hosts_file=>hosts_path, :options_file=>nil, :type=>"git", :provision=>true, :preserve_hosts=>false, :root_keys=>false, :quiet=>false, :xml=>false, :color=>true, :dry_run=>false, :timeout=>300, :fail_mode=>nil, :timesync=>false, :repo_proxy=>false, :add_el_extras=>false, :consoleport=>443, :pe_dir=>"/opt/enterprise/dists", :pe_version_file=>"LATEST", :pe_version_file_win=>"LATEST-win", :dot_fog=>"#{home}/.fog", :help=>false, :ec2_yaml=>"config/image_templates/ec2.yaml", :ssh=>{:config=>false, :paranoid=>false, :timeout=>300, :auth_methods=>["publickey"], :port=>22, :forward_agent=>true, :keys=>["#{home}/.ssh/id_rsa"], :user_known_hosts_file=>"#{home}/.ssh/known_hosts"}, :install=>["git://github.com/puppetlabs/puppet.git#1.0", "git://github.com/puppetlabs/hiera.git#hello"], :HOSTS=>{:"pe-ubuntu-lucid"=>{:roles=>["agent", "dashboard", "database", "master"], :vmname=>"pe-ubuntu-lucid", :platform=>"ubuntu-10.04-i386", :snapshot=>"clean-w-keys", :hypervisor=>"fusion"}, :"pe-centos6"=>{:roles=>["agent"], :vmname=>"pe-centos6", :platform=>"el-6-i386", :hypervisor=>"fusion", :snapshot=>"clean-w-keys"}}, :nfs_server=>"none", :helper=>[], :load_path=>[], :tests=>[], :pre_suite=>[], :post_suite=>[], :modules=>[]}
       end
 
       it "ensures that file-mode is one of fast/stop" do
         FakeFS.deactivate!
-        args = ["-h", hosts_path, "--debug", "--fail-mode", "slow"] 
+        args = ["-h", hosts_path, "--log-level", "debug", "--fail-mode", "slow"] 
         expect{parser.parse_args(args)}.to raise_error(ArgumentError)
       end
 
       it "ensures that type is one of pe/git" do
         FakeFS.deactivate!
-        args = ["-h", hosts_path, "--debug", "--type", "unkowns"]
+        args = ["-h", hosts_path, "--log-level", "debug", "--type", "unkowns"]
         expect{parser.parse_args(args)}.to raise_error(ArgumentError)
       end
 
@@ -148,17 +203,17 @@ module Beaker
         end
 
         context "for pe" do
-          it_should_behave_like(:a_platform_supporting_only_agents, 'solaris', 'pe')
-          it_should_behave_like(:a_platform_supporting_only_agents, 'windows', 'pe')
-          it_should_behave_like(:a_platform_supporting_only_agents, 'el-4', 'pe')
+          it_should_behave_like(:a_platform_supporting_only_agents, 'solaris-version-arch', 'pe')
+          it_should_behave_like(:a_platform_supporting_only_agents, 'windows-version-arch', 'pe')
+          it_should_behave_like(:a_platform_supporting_only_agents, 'el-4-arch', 'pe')
         end
 
         context "for foss" do
-          it_should_behave_like(:a_platform_supporting_only_agents, 'windows', 'git')
-          it_should_behave_like(:a_platform_supporting_only_agents, 'el-4', 'git')
+          it_should_behave_like(:a_platform_supporting_only_agents, 'windows-version-arch', 'git')
+          it_should_behave_like(:a_platform_supporting_only_agents, 'el-4-arch', 'git')
 
           it "allows master role for solaris" do
-            hosts_file = fake_hosts_file_for_platform(hosts, 'solaris')
+            hosts_file = fake_hosts_file_for_platform(hosts, 'solaris-version-arch')
             args = ["--type", "git", "--hosts", hosts_file]
             options_hash = parser.parse_args(args)
             expect(options_hash[:HOSTS][:master][:platform]).to match(/solaris/)

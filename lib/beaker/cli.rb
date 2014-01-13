@@ -1,5 +1,15 @@
 module Beaker
   class CLI
+    GEMSPEC = File.join(File.expand_path(File.dirname(__FILE__)), "../../beaker.gemspec")
+    VERSION_STRING = 
+"      wWWWw
+      |o o|
+      | O |  %s!
+      |(\")|
+     / \\X/ \\
+    |   V   |
+    |   |   | "
+
     def initialize
       @options_parser = Beaker::Options::Parser.new
       @options = @options_parser.parse_args
@@ -10,7 +20,13 @@ module Beaker
         @logger.notify(@options_parser.usage)
         exit
       end
-      @logger.notify(@options.dump)
+      if @options[:version]
+        require 'rubygems' unless defined?(Gem)
+        spec = Gem::Specification::load(GEMSPEC)
+        @logger.notify(VERSION_STRING % spec.version)
+        exit
+      end
+      @logger.info(@options.dump)
 
       #add additional paths to the LOAD_PATH
       if not @options[:load_path].empty?

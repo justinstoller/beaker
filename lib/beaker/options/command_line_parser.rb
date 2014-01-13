@@ -118,10 +118,21 @@ module Beaker
             @cmd_options[:color] = bool
           end
 
+          opts.on '--log-level LEVEL',
+                  'Log level',
+                  'Supported LEVEL keywords:',
+                  'debug   : all messages, plus full stack trace of errors',
+                  'verbose : all messages',
+                  'info    : info messages, notifications and warnings',
+                  'notify  : notifications and warnings',
+                  'warn    : warnings only',
+                  '(default: info)' do |val|
+            @cmd_options[:log_level] = val
+          end
+
           opts.on '--[no-]debug',
-                  'Enable full debugging',
-                  '(default: false)' do |bool|
-            @cmd_options[:debug] = bool
+                  'DEPRECATED, use --log-level' do |bool|
+            @cmd_options[:log_level] =  bool ? 'debug' : 'info'
           end
 
           opts.on  '-d', '--[no-]dry-run',
@@ -155,6 +166,10 @@ module Beaker
                   'Add Extra Packages for Enterprise Linux (EPEL) repository to el-* hosts',
                   '(default: false)' do
             @cmd_options[:add_el_extras] = true
+          end
+
+          opts.on('--version', 'Report currently running version of beaker' ) do 
+            @cmd_options[:version] = true
           end
 
           opts.on '-c', '--config FILE',
