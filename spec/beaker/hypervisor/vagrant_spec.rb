@@ -8,6 +8,16 @@ module Beaker
       @hosts = make_hosts()
     end
 
+    it "stores the vagrant file in $WORKINGDIR/.vagrant/beaker_vagrant_files/sample.cfg" do
+      FakeFS.activate!
+      vagrant.stub( :randmac ).and_return( "0123456789" )
+      path = vagrant.instance_variable_get( :@vagrant_path )
+
+      expect( path ).to be === File.join(Dir.pwd, '.vagrant', 'beaker_vagrant_files', 'sample.cfg')
+
+    end
+
+
     it "can make a Vagranfile for a set of hosts" do
       FakeFS.activate!
       path = vagrant.instance_variable_get( :@vagrant_path )
@@ -66,8 +76,12 @@ module Beaker
     PasswordAuthentication no
     IdentityFile /home/root/.vagrant.d/insecure_private_key
     IdentitiesOnly yes")
+      wait_thr = OpenStruct.new
+      state = mock( 'state' )
+      state.stub( :success? ).and_return( true )
+      wait_thr.value = state
 
-      Open3.stub( :popen3 ).with( 'vagrant', 'ssh-config', host.name ).and_return( [ "", out ])
+      Open3.stub( :popen3 ).with( 'vagrant', 'ssh-config', host.name ).and_return( [ "", out, "", wait_thr ])
 
       file = double( 'file' )
       file.stub( :path ).and_return( '/path/sshconfig' )
@@ -82,22 +96,41 @@ module Beaker
 
     end
 
-    it "can provision a set of hosts" do
+    describe "provisioning and cleanup" do
 
-      vagrant.should_receive( :make_vfile ).with( @hosts ).once
-
-      vagrant.should_receive( :vagrant_cmd ).with( "halt" ).once
-      vagrant.should_receive( :vagrant_cmd ).with( "up" ).once
-      @hosts.each do |host|
-        host_prev_name = host['user']
-        vagrant.should_receive( :set_ssh_config ).with( host, 'vagrant' ).once
-        vagrant.should_receive( :copy_ssh_to_root ).with( host ).once
-        vagrant.should_receive( :set_ssh_config ).with( host, host_prev_name ).once
+      before :each do
+        FakeFS.activate!
+        vagrant.should_receive( :vagrant_cmd ).with( "up" ).once
+        @hosts.each do |host|
+          host_prev_name = host['user']
+          vagrant.should_receive( :set_ssh_config ).with( host, 'vagrant' ).once
+          vagrant.should_receive( :copy_ssh_to_root ).with( host ).once
+          vagrant.should_receive( :set_ssh_config ).with( host, host_prev_name ).once
+        end
+        vagrant.should_receive( :hack_etc_hosts ).with( @hosts ).once
       end
-      vagrant.should_receive( :hack_etc_hosts ).with( @hosts ).once
 
+      it "can provision a set of hosts" do
+        vagrant.should_receive( :make_vfile ).with( @hosts ).once
+        vagrant.should_receive( :vagrant_cmd ).with( "destroy --force" ).never
+        vagrant.provision
+      end
 
-      vagrant.provision
+      it "destroys an existing set of hosts before provisioning" do
+        vagrant.make_vfile(@hosts)
+        vagrant.should_receive(:vagrant_cmd).with("destroy --force").once
+        vagrant.provision
+      end
+
+      it "can cleanup" do
+        vagrant.should_receive( :vagrant_cmd ).with( "destroy --force" ).once
+        FileUtils.should_receive( :rm_rf ).once
+
+        vagrant.provision
+        vagrant.cleanup
+
+      end
+
     end
 
   end

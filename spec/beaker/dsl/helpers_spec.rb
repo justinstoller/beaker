@@ -297,6 +297,33 @@ describe ClassMixedWithDSLHelpers do
   end
 
   describe '#apply_manifest_on' do
+    it 'calls puppet' do
+      subject.should_receive( :puppet ).
+        with( 'apply', '--verbose').
+        and_return( 'puppet_command' )
+
+      subject.should_receive( :on ).
+        with( 'my_host', 'puppet_command',
+              :acceptable_exit_codes => [0],
+              :stdin => "class { \"boo\": }\n" )
+
+      subject.apply_manifest_on( 'my_host', 'class { "boo": }')
+    end
+    it 'adds acceptable exit codes with :catch_failures' do
+      subject.should_receive( :puppet ).
+        with( 'apply', '--verbose', '--trace', '--detailed-exitcodes' ).
+        and_return( 'puppet_command' )
+
+      subject.should_receive( :on ).
+        with( 'my_host', 'puppet_command',
+              :acceptable_exit_codes => [0,2],
+              :stdin => "class { \"boo\": }\n" )
+
+      subject.apply_manifest_on( 'my_host',
+                                'class { "boo": }',
+                                :trace => true,
+                                :catch_failures => true )
+    end
     it 'allows acceptable exit codes through :catch_failures' do
       subject.should_receive( :puppet ).
         with( 'apply', '--verbose', '--trace', '--detailed-exitcodes' ).
@@ -312,6 +339,75 @@ describe ClassMixedWithDSLHelpers do
                                 :acceptable_exit_codes => [4],
                                 :trace => true,
                                 :catch_failures => true )
+    end
+    it 'enforces a 0 exit code through :catch_changes' do
+      subject.should_receive( :puppet ).
+        with( 'apply', '--verbose', '--trace', '--detailed-exitcodes' ).
+        and_return( 'puppet_command' )
+
+      subject.should_receive( :on ).with(
+        'my_host',
+        'puppet_command',
+        :acceptable_exit_codes => [0],
+        :stdin                 => "class { \"boo\": }\n"
+      )
+
+      subject.apply_manifest_on(
+        'my_host',
+        'class { "boo": }',
+        :trace         => true,
+        :catch_changes => true
+      )
+    end
+    it 'enforces exit codes through :expect_failures' do
+      subject.should_receive( :puppet ).
+        with( 'apply', '--verbose', '--trace', '--detailed-exitcodes' ).
+        and_return( 'puppet_command' )
+
+      subject.should_receive( :on ).with(
+        'my_host',
+        'puppet_command',
+        :acceptable_exit_codes => [1,4,6],
+        :stdin                 => "class { \"boo\": }\n"
+      )
+
+      subject.apply_manifest_on(
+        'my_host',
+        'class { "boo": }',
+        :trace           => true,
+        :expect_failures => true
+      )
+    end
+    it 'enforces exit codes through :expect_failures' do
+      expect {
+        subject.apply_manifest_on(
+          'my_host',
+          'class { "boo": }',
+          :trace           => true,
+          :expect_failures => true,
+          :catch_failures  => true
+        )
+      }.to raise_error ArgumentError, /catch_failures.+expect_failures/
+    end
+    it 'enforces added exit codes through :expect_failures' do
+      subject.should_receive( :puppet ).
+        with( 'apply', '--verbose', '--trace', '--detailed-exitcodes' ).
+        and_return( 'puppet_command' )
+
+      subject.should_receive( :on ).with(
+        'my_host',
+        'puppet_command',
+        :acceptable_exit_codes => [1,2,3,4,5,6],
+        :stdin                 => "class { \"boo\": }\n"
+      )
+
+      subject.apply_manifest_on(
+        'my_host',
+        'class { "boo": }',
+        :acceptable_exit_codes => (1..5),
+        :trace                 => true,
+        :expect_failures       => true
+      )
     end
   end
 
@@ -524,6 +620,7 @@ describe ClassMixedWithDSLHelpers do
     def stub_host_and_subject_to_allow_the_default_testdir_argument_to_be_created
       subject.instance_variable_set(:@path, test_case_path)
       host.stub(:tmpdir).and_return(tmpdir_path)
+      host.stub(:file_exist?).and_return(true)
     end
 
     before do
@@ -533,6 +630,13 @@ describe ClassMixedWithDSLHelpers do
 
     it "raises an ArgumentError if you try to submit a String instead of a Hash of options" do
       expect { subject.with_puppet_running_on(host, '--foo --bar') }.to raise_error(ArgumentError, /conf_opts must be a Hash. You provided a String: '--foo --bar'/)
+    end
+
+    it 'raises the early_exception if backup_the_file fails' do
+      subject.should_receive(:backup_the_file).and_raise(RuntimeError.new('puppet conf backup failed'))
+      expect {
+        subject.with_puppet_running_on(host, {})
+      }.to raise_error(RuntimeError, /puppet conf backup failed/)
     end
 
     describe "with valid arguments" do
@@ -623,6 +727,12 @@ describe ClassMixedWithDSLHelpers do
           subject.with_puppet_running_on(host, {})
           expect(host).to execute_commands_matching(/cat '#{backup_location}' > '#{original_location}'/).once
         end
+
+        it "doesn't restore a non-existent file" do
+          subject.stub(:backup_the_file)
+          subject.with_puppet_running_on(host, {})
+          expect(host).to execute_commands_matching(/rm -f '#{original_location}'/)
+        end
       end
 
       describe 'handling failures' do
@@ -662,4 +772,23 @@ describe ClassMixedWithDSLHelpers do
 
     end
   end
+
+  describe '#fact_on' do
+    it 'retreives a fact on host(s)' do
+      subject.should_receive(:facter).with('osfamily',{}).once
+      subject.should_receive(:on).and_return(result)
+
+      subject.fact_on('host','osfamily')
+    end
+  end
+
+  describe '#fact' do
+    it 'delegates to #fact_on with the default host' do
+      subject.stub(:hosts).and_return(hosts)
+      subject.should_receive(:fact_on).with(master,"osfamily",{}).once
+
+      subject.fact('osfamily')
+    end
+  end
+
 end

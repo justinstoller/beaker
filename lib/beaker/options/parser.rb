@@ -11,6 +11,8 @@ module Beaker
       #These options expand out into an array of .rb files
       RB_FILE_OPTS = [:tests, :pre_suite, :post_suite]
 
+      PLATFORMS = /^(centos|fedora|debian|oracle|redhat|scientific|sles|ubuntu|windows|solaris|aix|el)\-.+\-.+$/
+
       PARSE_ERROR = if RUBY_VERSION > '1.8.7'; then Psych::SyntaxError; else ArgumentError; end
 
       #The OptionsHash of all parsed options
@@ -78,7 +80,7 @@ module Beaker
               if discover_files.empty?
                 parser_error "empty directory used as an option (#{root})!"
               end
-              files += discover_files
+              files += discover_files.sort
             end
           end
         end
@@ -151,7 +153,7 @@ module Beaker
         #   overwrite defaults with command line and file options 
         @options = @options.merge(cmd_line_and_file_options)
 
-        if not @options[:help]
+        if not @options[:help] and not @options[:version]
           #read the hosts file that contains the node configuration and hypervisor info
           hosts_options = Beaker::Options::HostsFileParser.parse_hosts_file(@options[:hosts_file])
           # merge in host file vars
@@ -186,6 +188,7 @@ module Beaker
       #Validate all merged options values for correctness
       #
       #Currently checks:
+      #  - each host has a valid platform
       #  - if a keyfile is provided then use it
       #  - paths provided to --test, --pre-suite, --post-suite provided lists of .rb files for testing
       #  - --type is one of 'pe' or 'git'
@@ -198,6 +201,16 @@ module Beaker
       #
       #@raise [ArgumentError] Raise if argument/options values are invalid
       def normalize_args
+
+        @options['HOSTS'].each_key do |name|
+          if not @options['HOSTS'][name]['platform']
+            parser_error "Host #{name} does not have a platform specified"
+          else
+            if not @options['HOSTS'][name]['platform'] =~ PLATFORMS
+              parser_error "Host #{name} is on unsupported platform #{@options['HOSTS'][name]['platform']}"
+            end
+          end
+        end
 
         #use the keyfile if present
         if @options.has_key?(:keyfile)
@@ -255,6 +268,9 @@ module Beaker
         roles.each do |role_array|
           if role_array.include?('master')
             master += 1
+          end
+          if role_array.include?('frictionless') and !(role_array & ['master', 'database', 'dashboard', 'console']).empty?
+            parser_error "Only agent nodes may have the role 'frictionless', fix #{@options[:hosts_file]}"
           end
         end
         if master > 1 or master < 1
