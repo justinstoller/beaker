@@ -497,7 +497,7 @@ describe ClassMixedWithDSLHelpers do
               'puppetlabs.com',
               'ensure=absent' )
 
-      subject.stub_hosts_on( 'my_host', 'puppetlabs.com' => '127.0.0.1' )
+      subject.stub_hosts_on( make_host('my_host', {}), 'puppetlabs.com' => '127.0.0.1' )
     end
   end
 
@@ -514,15 +514,15 @@ describe ClassMixedWithDSLHelpers do
 
   describe '#stub_forge_on' do
     it 'stubs forge.puppetlabs.com with the value of `forge`' do
-      subject.stub( :options ).and_return( {} )
+      host = make_host('my_host', {})
       Resolv.should_receive( :getaddress ).
         with( 'my_forge.example.com' ).and_return( '127.0.0.1' )
       subject.should_receive( :stub_hosts_on ).
-        with( 'my_host', 'forge.puppetlabs.com' => '127.0.0.1' )
+        with( host, 'forge.puppetlabs.com' => '127.0.0.1' )
       subject.should_receive( :stub_hosts_on ).
-        with( 'my_host', 'forgeapi.puppetlabs.com' => '127.0.0.1' )
+        with( host, 'forgeapi.puppetlabs.com' => '127.0.0.1' )
 
-      subject.stub_forge_on( 'my_host', 'my_forge.example.com' )
+      subject.stub_forge_on( host, 'my_forge.example.com' )
     end
   end
 
