@@ -867,7 +867,7 @@ describe ClassMixedWithDSLHelpers do
       subject.should_receive(:facter).with('osfamily',{}).once
       subject.should_receive(:on).and_return(result)
 
-      subject.fact_on('host','osfamily')
+      expect( subject.fact_on('host','osfamily') ).not_to include("\n")
     end
   end
 
