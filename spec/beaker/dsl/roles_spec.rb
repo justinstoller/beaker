@@ -83,6 +83,12 @@ describe ClassMixedWithDSLRoles do
       subject.should_receive( :hosts ).exactly( 1  ).times.and_return( hosts )
       expect( subject.default ).to be == default
     end
+    it 'returns the master if no default host is set' do
+      @hosts = [ db, agent1, agent2, master]
+      subject.should_receive( :hosts ).exactly( 4 ).times.and_return( hosts )
+      expect( subject.default ).to be == master
+    end
+
     it 'raises an error if there is more than one default' do
       @hosts = [ db, monolith, default, default ]
       subject.should_receive( :hosts ).and_return( hosts )
