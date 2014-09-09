@@ -2,6 +2,7 @@ require 'spec_helper'
 
 class ClassMixedWithDSLInstallUtils
   include Beaker::DSL::InstallUtils
+  include Beaker::DSL::Wrappers
   include Beaker::DSL::Helpers
   include Beaker::DSL::Structure
   include Beaker::DSL::Roles

@@ -1081,6 +1081,14 @@ module Beaker
         do_higgs_install higgs_host, options
       end
 
+      def puppet_module_install_on( host, opts = {} )
+        install_puppet_module_via_pmt_on( host, opts )
+      end
+
+      def puppet_module_install( opts = {} )
+        puppet_module_install_on( hosts, opts )
+      end
+
       # Copy a puppet module from a given source to all hosts under test.
       # Assumes each host under test has an associated 'distmoduledir' (set in the
       # host configuration YAML file).
@@ -1088,16 +1096,16 @@ module Beaker
       # @param opts [Hash]
       # @option opts [String] :source The location on the test runners box where the files are found
       # @option opts [String] :module_name The name of the module to be copied over
-      def puppet_module_install_on(host, opts = {})
+      def install_puppet_module_via_pmt_on( host, opts = {} )
         block_on host do | h |
           on h, puppet("module install #{opts[:module_name]}")
         end
       end
 
       # Copy a puppet module from a given source to all hosts under test.
-      # @see #puppet_module_install_on
-      def puppet_module_install opts = {}
-        puppet_module_install_on(hosts, opts)
+      # @see #install_puppet_module_via_pmt_on
+      def install_puppet_module_via_pmt( opts = {} )
+        install_puppet_module_via_pmt_on(hosts, opts)
       end
 
       # Install local module for acceptance testing
