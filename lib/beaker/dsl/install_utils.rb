@@ -1082,11 +1082,16 @@ module Beaker
       end
 
       def puppet_module_install_on( host, opts = {} )
-        install_puppet_module_via_pmt_on( host, opts )
+        if options[:forge_host]
+          stub_forge_on( host )
+          install_puppet_module_via_pmt_on( host, opts )
+        else
+          copy_module_to( host, opts )
+        end
       end
 
       def puppet_module_install( opts = {} )
-        puppet_module_install_on( hosts, opts )
+        block_on( hosts ) {|h| puppet_module_install_on( h, opts ) }
       end
 
       # Copy a puppet module from a given source to all hosts under test.
@@ -1097,7 +1102,7 @@ module Beaker
       # @option opts [String] :source The location on the test runners box where the files are found
       # @option opts [String] :module_name The name of the module to be copied over
       def install_puppet_module_via_pmt_on( host, opts = {} )
-        block_on host do | h |
+        block_on host do |h|
           on h, puppet("module install #{opts[:module_name]}")
         end
       end

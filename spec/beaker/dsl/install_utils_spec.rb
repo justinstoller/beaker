@@ -14,7 +14,6 @@ class ClassMixedWithDSLInstallUtils
 end
 
 describe ClassMixedWithDSLInstallUtils do
-  let( :master ) { make_host( 'master',   :roles => %w( master agent default)    ) }
   let(:opts)          { Beaker::Options::Presets.presets.merge(Beaker::Options::Presets.env_vars) }
   let(:basic_hosts)   { make_hosts( { :pe_ver => '3.0',
                                        :platform => 'linux',
@@ -732,11 +731,35 @@ describe ClassMixedWithDSLInstallUtils do
   end
 
   describe '#puppet_module_install_on' do
-    it 'scps the module to the module dir' do
-      subject.stub( :hosts ).and_return( hosts )
+    context 'having set a stub forge' do
+      it 'stubs the forge on the host' do
+        master = hosts.first
+        subject.stub( :options ).and_return( {:forge_host => 'ahost.com'} )
 
-      subject.should_receive( :puppet ).with('module install test' ).once
-      subject.puppet_module_install_on( master, {:source => '/module', :module_name => 'test'} )
+        subject.should_receive( :stub_forge_on ).and_return( master )
+
+        subject.puppet_module_install_on( master, {:source => '/module', :module_name => 'test'} )
+      end
+
+      it 'installs via #install_puppet_module_via_pmt' do
+        master = hosts.first
+        subject.stub( :options ).and_return( {:forge_host => 'ahost.com'} )
+        subject.stub( :stub_forge_on )
+
+        subject.should_receive( :install_puppet_module_via_pmt_on )
+
+        subject.puppet_module_install_on( master, {:source => '/module', :module_name => 'test'} )
+      end
+    end
+    context 'without a stub forge (default)' do
+      it 'calls copy_module_to to get the module on the SUT' do
+        master = hosts.first
+        subject.stub( :options ).and_return( {} )
+
+        subject.should_receive( :copy_module_to )
+
+        subject.puppet_module_install_on( master, {:source => '/module', :module_name => 'test'} )
+      end
     end
   end
 
@@ -747,6 +770,27 @@ describe ClassMixedWithDSLInstallUtils do
       subject.should_receive( :puppet_module_install_on ).with( hosts, {:source => '/module', :module_name => 'test'}).once
 
       subject.puppet_module_install( {:source => '/module', :module_name => 'test'} )
+    end
+  end
+
+  describe '#install_puppet_module_via_pmt_on' do
+    it 'installs module via puppet module tool' do
+      subject.stub( :hosts ).and_return( hosts )
+      master = hosts.first
+
+      subject.should_receive( :puppet ).with('module install test' ).once
+
+      subject.install_puppet_module_via_pmt_on( master, {:source => '/module', :module_name => 'test'} )
+    end
+  end
+
+  describe '#install_puppet_module_via_pmt' do
+    it 'delegates to #install_puppet_module_via_pmt with the hosts list' do
+      subject.stub( :hosts ).and_return( hosts )
+
+      subject.should_receive( :install_puppet_module_via_pmt_on ).with( hosts, {:source => '/module', :module_name => 'test'}).once
+
+      subject.install_puppet_module_via_pmt( {:source => '/module', :module_name => 'test'} )
     end
   end
 
