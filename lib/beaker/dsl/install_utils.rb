@@ -1103,7 +1103,8 @@ module Beaker
       # @option opts [String] :module_name The name of the module to be copied over
       def install_puppet_module_via_pmt_on( host, opts = {} )
         block_on host do |h|
-          on h, puppet("module install #{opts[:module_name]}")
+          version_info = opts[:version] ? "-v #{opts[:version]}" : ""
+          on h, puppet("module install #{opts[:module_name]} #{version_info}")
         end
       end
 
