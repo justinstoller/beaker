@@ -738,7 +738,7 @@ describe ClassMixedWithDSLInstallUtils do
 
         subject.should_receive( :with_forge_stubbed_on )
 
-        subject.puppet_module_install_on( master, {:source => '/module', :module_name => 'test'} )
+        subject.puppet_module_install_on( master, nil, {:source => '/module', :module_name => 'test'} )
       end
 
       it 'installs via #install_puppet_module_via_pmt' do
@@ -748,7 +748,7 @@ describe ClassMixedWithDSLInstallUtils do
 
         subject.should_receive( :install_puppet_module_via_pmt_on )
 
-        subject.puppet_module_install_on( master, {:source => '/module', :module_name => 'test'} )
+        subject.puppet_module_install_on( master, nil, {:source => '/module', :module_name => 'test'} )
       end
     end
     context 'without a stub forge (default)' do
@@ -758,7 +758,7 @@ describe ClassMixedWithDSLInstallUtils do
 
         subject.should_receive( :copy_module_to )
 
-        subject.puppet_module_install_on( master, {:source => '/module', :module_name => 'test'} )
+        subject.puppet_module_install_on( master, nil, {:source => '/module', :module_name => 'test'} )
       end
     end
   end
@@ -769,7 +769,7 @@ describe ClassMixedWithDSLInstallUtils do
 
       hosts.each do |host|
         subject.should_receive( :puppet_module_install_on ).
-          with( host, {:source => '/module', :module_name => 'test'})
+          with( host, nil, {:source => '/module', :module_name => 'test'})
       end
 
       subject.puppet_module_install( {:source => '/module', :module_name => 'test'} )
