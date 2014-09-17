@@ -1037,7 +1037,7 @@ module Beaker
 
           block.call
 
-        rescue
+        ensure
           ip_spec.each do |address, ip|
             logger.notify("Unstubbing address #{address} to IP #{ip} on machine #{host}")
             on( host, puppet('resource', 'host', address, 'ensure=absent') )
