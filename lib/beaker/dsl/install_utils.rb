@@ -1081,7 +1081,11 @@ module Beaker
         do_higgs_install higgs_host, options
       end
 
-      def puppet_module_install_on( host, opts )
+      # Install the desired module on all hosts using either the PMT or a
+      #   staging forge
+      #
+      # @see install_dev_puppet_module
+      def install_dev_puppet_module_on( host, opts )
         if options[:forge_host]
           with_forge_stubbed_on( host ) do
             install_puppet_module_via_pmt_on( host, opts )
@@ -1090,27 +1094,35 @@ module Beaker
           copy_module_to( host, opts )
         end
       end
+      alias :puppet_module_install_on :install_dev_puppet_module_on
 
-      # @example Installing a release module (an implicit project dependency, perhaps)
-      #   puppet_module_install( 'puppetlabs-stdlib' )
+      # Install the desired module on all hosts using either the PMT or a
+      #   staging forge
+      #
+      # Passes options through to either `install_puppet_module_via_pmt_on`
+      #   or `copy_module_to`
+      #
+      # @param opts [Hash]
       #
       # @example Installing a module from the local directory
-      #   puppet_module_install( :source => './', :module_name => 'concat' )
+      #   install_dev_puppet_module( :source => './', :module_name => 'concat' )
       #
       # @example Installing a module from a staging forge
       #   options[:forge_host] = 'my-forge-api.example.com'
-      #   puppet_module_install( :source => './', :module_name => 'concat' )
-      def puppet_module_install( opts )
-        block_on( hosts ) {|h| puppet_module_install_on( h, opts ) }
+      #   install_dev_puppet_module( :source => './', :module_name => 'concat' )
+      #
+      # @see install_puppet_module_via_pmt
+      # @see copy_module_to
+      def install_dev_puppet_module( opts )
+        block_on( hosts ) {|h| install_dev_puppet_module_on( h, opts ) }
       end
+      alias :puppet_module_install :install_dev_puppet_module
 
-      # Copy a puppet module from a given source to all hosts under test.
-      # Assumes each host under test has an associated 'distmoduledir' (set in the
-      # host configuration YAML file).
+      # Install the desired module with the PMT on a given host
       #
       # @param opts [Hash]
-      # @option opts [String] :source The location on the test runners box where the files are found
-      # @option opts [String] :module_name The name of the module to be copied over
+      # @option opts [String] :module_name The short name of the module to be installed
+      # @option opts [String] :version The version of the module to be installed
       def install_puppet_module_via_pmt_on( host, opts = {} )
         block_on host do |h|
           version_info = opts[:version] ? "-v #{opts[:version]}" : ""
@@ -1125,7 +1137,7 @@ module Beaker
         end
       end
 
-      # Copy a puppet module from a given source to all hosts under test.
+      # Install the desired module with the PMT on all known hosts
       # @see #install_puppet_module_via_pmt_on
       def install_puppet_module_via_pmt( opts = {} )
         install_puppet_module_via_pmt_on(hosts, opts)
