@@ -736,7 +736,7 @@ describe ClassMixedWithDSLInstallUtils do
         master = hosts.first
         subject.stub( :options ).and_return( {:forge_host => 'ahost.com'} )
 
-        subject.should_receive( :stub_forge_on ).and_return( master )
+        subject.should_receive( :with_forge_stubbed_on )
 
         subject.puppet_module_install_on( master, {:source => '/module', :module_name => 'test'} )
       end
@@ -744,7 +744,7 @@ describe ClassMixedWithDSLInstallUtils do
       it 'installs via #install_puppet_module_via_pmt' do
         master = hosts.first
         subject.stub( :options ).and_return( {:forge_host => 'ahost.com'} )
-        subject.stub( :stub_forge_on )
+        subject.stub( :with_forge_stubbed_on ).and_yield
 
         subject.should_receive( :install_puppet_module_via_pmt_on )
 
@@ -767,7 +767,10 @@ describe ClassMixedWithDSLInstallUtils do
     it 'delegates to #puppet_module_install_on with the hosts list' do
       subject.stub( :hosts ).and_return( hosts )
 
-      subject.should_receive( :puppet_module_install_on ).with( hosts, {:source => '/module', :module_name => 'test'}).once
+      hosts.each do |host|
+        subject.should_receive( :puppet_module_install_on ).
+          with( host, {:source => '/module', :module_name => 'test'})
+      end
 
       subject.puppet_module_install( {:source => '/module', :module_name => 'test'} )
     end
@@ -778,9 +781,9 @@ describe ClassMixedWithDSLInstallUtils do
       subject.stub( :hosts ).and_return( hosts )
       master = hosts.first
 
-      subject.should_receive( :puppet ).with('module install test' ).once
+      subject.should_receive( :puppet ).with('module install test ' ).once
 
-      subject.install_puppet_module_via_pmt_on( master, {:source => '/module', :module_name => 'test'} )
+      subject.install_puppet_module_via_pmt_on( master, {:module_name => 'test'} )
     end
   end
 
@@ -850,8 +853,8 @@ describe ClassMixedWithDSLInstallUtils do
   end
 
   describe 'get_module_name' do
-    it 'should return a has of author and modulename' do
-      expect(subject.get_module_name('myname-test_43_module')).to eq('test_43_module')
+    it 'should return an array of author and modulename' do
+      expect(subject.get_module_name('myname-test_43_module')).to eq(['myname', 'test_43_module'])
     end
     it 'should return nil for invalid names' do
       expect(subject.get_module_name('myname-')).to eq(nil)
@@ -865,7 +868,7 @@ describe ClassMixedWithDSLInstallUtils do
       File.stub(:read).with("#{directory}/metadata.json").and_return(" {\"name\":\"myname-testmodule\"} ")
       subject.logger.should_receive(:debug).with("Attempting to parse Modulename from metadata.json")
       subject.logger.should_not_receive(:debug).with('Unable to determine name, returning null')
-      subject.parse_for_modulename(directory).should eq('testmodule')
+      subject.parse_for_modulename(directory).should eq(['myname', 'testmodule'])
     end
     it 'should return name from Modulefile' do
       File.stub(:exists?).with("#{directory}/metadata.json").and_return(false)
@@ -873,7 +876,7 @@ describe ClassMixedWithDSLInstallUtils do
       File.stub(:read).with("#{directory}/Modulefile").and_return("name    'myname-testmodule'  \nauthor   'myname'")
       subject.logger.should_receive(:debug).with("Attempting to parse Modulename from Modulefile")
       subject.logger.should_not_receive(:debug).with("Unable to determine name, returning null")
-      expect(subject.parse_for_modulename(directory)).to eq('testmodule')
+      expect(subject.parse_for_modulename(directory)).to eq(['myname', 'testmodule'])
     end
   end
 
