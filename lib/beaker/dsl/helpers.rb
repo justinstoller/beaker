@@ -1088,15 +1088,15 @@ module Beaker
         forge_host ||= options[:forge_host]
         @forge_ip ||= Resolv.getaddress(forge_host)
         with_host_stubbed_on( host,
-                             'forge.puppetlabs.com'    => @forge_ip,
-                             'forgeapi.puppetlabs.com' => @forge_ip,
-                              block                                    )
+                              {'forge.puppetlabs.com'  => @forge_ip,
+                             'forgeapi.puppetlabs.com' => @forge_ip},
+                              &block                                    )
       end
 
       # This wraps `with_forge_stubbed_on` and provides it the default host
       # @see with_forge_stubbed_on
       def with_forge_stubbed( forge_host = nil, &block )
-        with_forge_stubbed_on( default, forge_host, block )
+        with_forge_stubbed_on( default, forge_host, &block )
       end
 
       # This wraps the method `stub_hosts` and makes the stub specific to
