@@ -1081,18 +1081,38 @@ module Beaker
         do_higgs_install higgs_host, options
       end
 
-      def puppet_module_install_on( host, opts = {} )
-        if options[:forge_host]
-          with_forge_stubbed_on( host ) do
-            install_puppet_module_via_pmt_on( host, opts )
-          end
+      def puppet_module_install_on( host, modname, opts )
+        if modname
+          install_puppet_module_via_pmt_on( host )
         else
-          copy_module_to( host, opts )
+          if options[:forge_host]
+            with_forge_stubbed_on( host ) do
+              install_puppet_module_via_pmt_on( host, opts )
+            end
+          else
+            copy_module_to( host, opts )
+          end
         end
       end
 
-      def puppet_module_install( opts = {} )
-        block_on( hosts ) {|h| puppet_module_install_on( h, opts ) }
+      # @example Installing a release module (an implicit project dependency, perhaps)
+      #   puppet_module_install( 'puppetlabs-stdlib' )
+      #
+      # @example Installing a module from the local directory
+      #   puppet_module_install( :source => './', :module_name => 'concat' )
+      #
+      # @example Installing a module from a staging forge
+      #   options[:forge_host] = 'my-forge-api.example.com'
+      #   puppet_module_install( :source => './', :module_name => 'concat' )
+      def puppet_module_install( *args )
+        opts    = args.pop   if args.last.is_a? Hash
+        modname = args.shift if args.first.is_a? String
+
+        unless modname or opts
+          raise( "Could not parse arguments to puppet_module_install: #{args.inspect}" )
+        end
+
+        block_on( hosts ) {|h| puppet_module_install_on( h, modname, opts ) }
       end
 
       # Copy a puppet module from a given source to all hosts under test.
