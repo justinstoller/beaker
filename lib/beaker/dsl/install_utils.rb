@@ -1083,8 +1083,9 @@ module Beaker
 
       def puppet_module_install_on( host, opts = {} )
         if options[:forge_host]
-          stub_forge_on( host )
-          install_puppet_module_via_pmt_on( host, opts )
+          with_forge_stubbed_on( host ) do
+            install_puppet_module_via_pmt_on( host, opts )
+          end
         else
           copy_module_to( host, opts )
         end
@@ -1104,7 +1105,14 @@ module Beaker
       def install_puppet_module_via_pmt_on( host, opts = {} )
         block_on host do |h|
           version_info = opts[:version] ? "-v #{opts[:version]}" : ""
-          on h, puppet("module install #{opts[:module_name]} #{version_info}")
+          if opts[:source]
+            author_name, module_name = parse_for_modulename( opts[:source] )
+            modname = "#{author_name}-#{module_name}"
+          else
+            modname = opts[:module_name]
+          end
+
+          on h, puppet("module install #{modname} #{version_info}")
         end
       end
 
@@ -1142,7 +1150,7 @@ module Beaker
         if opts.has_key?(:module_name)
           module_name = opts[:module_name]
         else
-          module_name = parse_for_modulename(opts[:source])
+          _, module_name = parse_for_modulename(opts[:source])
         end
         scp_to host, File.join(opts[:source]), File.join(target_module_dir, module_name), {:ignore => ignore_list}
       end
@@ -1202,24 +1210,24 @@ module Beaker
       # @param [String] root_module_dir
       # @return [String] module name
       def parse_for_modulename(root_module_dir)
-        module_name = nil
+        author_name, module_name = nil, nil
         if File.exists?("#{root_module_dir}/metadata.json")
           logger.debug "Attempting to parse Modulename from metadata.json"
           module_json = JSON.parse(File.read "#{root_module_dir}/metadata.json")
           if(module_json.has_key?('name'))
-            module_name = get_module_name(module_json['name'])
+            author_name, module_name = get_module_name(module_json['name'])
           end
         end
         if !module_name && File.exists?("#{root_module_dir}/Modulefile")
           logger.debug "Attempting to parse Modulename from Modulefile"
           if /^name\s+'?(\w+-\w+)'?\s*$/i.match(File.read("#{root_module_dir}/Modulefile"))
-            module_name = get_module_name(Regexp.last_match[1])
+            author_name, module_name = get_module_name(Regexp.last_match[1])
           end
         end
-        if !module_name
+        if !module_name && !author_name
           logger.debug "Unable to determine name, returning null"
         end
-        module_name
+        return author_name, module_name
       end
 
       #Parse modulename from the pattern 'Auther-ModuleName'
@@ -1231,7 +1239,7 @@ module Beaker
       def get_module_name(author_module_name)
         split_name = split_author_modulename(author_module_name)
         if split_name
-          split_name[:module]
+          return split_name[:author], split_name[:module]
         end
       end
 

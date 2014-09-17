@@ -987,8 +987,8 @@ module Beaker
         end
       end
 
-      # This method accepts a block and using the puppet resource 'host' will
-      # setup host aliases before and after that block.
+      # This method using the puppet resource 'host' will setup host aliases
+      # and register the remove of host aliases via Beaker::TestCase#teardown
       #
       # A teardown step is also added to make sure unstubbing of the host is
       # removed always.
@@ -1011,6 +1011,36 @@ module Beaker
               logger.notify("Unstubbing address #{address} to IP #{ip} on machine #{host}")
               on( host, puppet('resource', 'host', address, 'ensure=absent') )
             end
+          end
+        end
+      end
+
+      # This method accepts a block and using the puppet resource 'host' will
+      # setup host aliases before and after that block.
+      #
+      # @param [Host, Array<Host>, String, Symbol] host    One or more hosts to act upon,
+      #                            or a role (String or Symbol) that identifies one or more hosts.
+      # @param ip_spec [Hash{String=>String}] a hash containing the host to ip
+      #   mappings
+      # @example Stub puppetlabs.com on the master to 127.0.0.1
+      #   with_host_stubbed_on(master, 'forgeapi.puppetlabs.com' => '127.0.0.1') do
+      #     puppet( "module install puppetlabs-stdlib" )
+      #   end
+      def with_host_stubbed_on(host, ip_spec, &block)
+        begin
+          block_on host do |host|
+            ip_spec.each_pair do |address, ip|
+              logger.notify("Stubbing address #{address} to IP #{ip} on machine #{host}")
+              on( host, puppet('resource', 'host', address, 'ensure=present', "ip=#{ip}") )
+            end
+          end
+
+          block.call
+
+        rescue
+          ip_spec.each do |address, ip|
+            logger.notify("Unstubbing address #{address} to IP #{ip} on machine #{host}")
+            on( host, puppet('resource', 'host', address, 'ensure=absent') )
           end
         end
       end
@@ -1042,6 +1072,31 @@ module Beaker
           stub_hosts_on(host, 'forge.puppetlabs.com' => @forge_ip)
           stub_hosts_on(host, 'forgeapi.puppetlabs.com' => @forge_ip)
         end
+      end
+
+      # This wraps the method `with_host_stubbed_on` and makes the stub specific to
+      # the forge alias.
+      #
+      # forge api v1 canonical source is forge.puppetlabs.com
+      # forge api v3 canonical source is forgeapi.puppetlabs.com
+      #
+      # @param host [String] the host to perform the stub on
+      # @param forge_host [String] The URL to use as the forge alias, will default to using :forge_host in the
+      #                             global options hash
+      def with_forge_stubbed_on( host, forge_host = nil, &block )
+        #use global options hash
+        forge_host ||= options[:forge_host]
+        @forge_ip ||= Resolv.getaddress(forge_host)
+        with_host_stubbed_on( host,
+                             'forge.puppetlabs.com'    => @forge_ip,
+                             'forgeapi.puppetlabs.com' => @forge_ip,
+                              block                                    )
+      end
+
+      # This wraps `with_forge_stubbed_on` and provides it the default host
+      # @see with_forge_stubbed_on
+      def with_forge_stubbed( forge_host = nil, &block )
+        with_forge_stubbed_on( default, forge_host, block )
       end
 
       # This wraps the method `stub_hosts` and makes the stub specific to
