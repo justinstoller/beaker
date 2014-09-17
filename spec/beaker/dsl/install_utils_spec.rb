@@ -730,7 +730,7 @@ describe ClassMixedWithDSLInstallUtils do
 
   end
 
-  describe '#puppet_module_install_on' do
+  describe '#install_dev_puppet_module_on' do
     context 'having set a stub forge' do
       it 'stubs the forge on the host' do
         master = hosts.first
@@ -738,7 +738,7 @@ describe ClassMixedWithDSLInstallUtils do
 
         subject.should_receive( :with_forge_stubbed_on )
 
-        subject.puppet_module_install_on( master, {:source => '/module', :module_name => 'test'} )
+        subject.install_dev_puppet_module_on( master, {:source => '/module', :module_name => 'test'} )
       end
 
       it 'installs via #install_puppet_module_via_pmt' do
@@ -748,7 +748,7 @@ describe ClassMixedWithDSLInstallUtils do
 
         subject.should_receive( :install_puppet_module_via_pmt_on )
 
-        subject.puppet_module_install_on( master, {:source => '/module', :module_name => 'test'} )
+        subject.install_dev_puppet_module_on( master, {:source => '/module', :module_name => 'test'} )
       end
     end
     context 'without a stub forge (default)' do
@@ -758,21 +758,22 @@ describe ClassMixedWithDSLInstallUtils do
 
         subject.should_receive( :copy_module_to )
 
-        subject.puppet_module_install_on( master, {:source => '/module', :module_name => 'test'} )
+        subject.install_dev_puppet_module_on( master, {:source => '/module', :module_name => 'test'} )
       end
     end
   end
 
-  describe '#puppet_module_install' do
-    it 'delegates to #puppet_module_install_on with the hosts list' do
+  describe '#install_dev_puppet_module' do
+    it 'delegates to #install_dev_puppet_module_on with the hosts list' do
       subject.stub( :hosts ).and_return( hosts )
+      subject.stub( :options ).and_return( {} )
 
       hosts.each do |host|
-        subject.should_receive( :puppet_module_install_on ).
+        subject.should_receive( :install_dev_puppet_module_on ).
           with( host, {:source => '/module', :module_name => 'test'})
       end
 
-      subject.puppet_module_install( {:source => '/module', :module_name => 'test'} )
+      subject.install_dev_puppet_module( {:source => '/module', :module_name => 'test'} )
     end
   end
 
